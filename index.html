@@ -20,7 +20,13 @@
                 <form id="f">
                     <input type="text" id="n1" class="form-control mb-2" placeholder="No Pesanan" required>
                     <input type="date" id="n2" class="form-control mb-2" required>
-                    <select id="n3" class="form-control mb-2"><option>Fatahna</option><option>Anggota 2</option></select>
+                    <select id="n3" class="form-control mb-2" required>
+                        <option value="" disabled selected>Pilih Nama Anggota</option>
+                        <option value="Fatahna">Fatahna</option>
+                        <option value="Anggota 2">Aghea</option>
+                        <option value="Anggota 3">Syauqi</option>
+                        <option value="Anggota 4">Abdillah</option>
+                    </select>    
                     <input type="text" id="n4" class="form-control mb-2" placeholder="Item/Menu" required>
                     <input type="number" id="n5" class="form-control mb-2" placeholder="Nominal" required>
                     <input type="file" id="n6" class="form-control mb-2" accept="image/*" required>
@@ -29,50 +35,107 @@
             </div>
             <div class="col-md-8">
                 <table class="table bg-white shadow-sm">
-                    <thead><tr><th>No</th><th>Nama</th><th>Nominal</th><th>Nota</th></tr></thead>
-                    <tbody id="tb"></tbody>
+                    <thead class="bg-dark text-white">
+                        <tr>
+                            <th>No</th>
+                            <th>No. Pesanan</th>
+                            <th>Nama</th>
+                            <th>Item</th>
+                            <th>Nominal</th>
+                            <th>Status</th>
+                            <th>Nota</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tb">
+                    </tbody>
                 </table>
+                </div>
             </div>
         </div>
-    </div>
 
     <script>
-        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzEUHWy-1z5q1p3LWuAL4bOXP_1WQ1DbzmSRiiHznVjGrN48Ngzdm9BPhhcjiKLAhRN/exec";
-        const BUDGET_AWAL = 180000000;
+        // GANTI DENGAN URL WEB APP ANDA YANG SUDAH JALAN TADI
+    const SCRIPT_URL = "URL_WEB_APP_ANDA_YANG_BERAKHIRAN_EXEC"; 
+    const BUDGET_AWAL = 180000000;
 
-        // Ambil Data
-        function load() {
-            fetch(SCRIPT_URL).then(r => r.json()).then(d => {
-                let h = "", total = 0;
-                for(let i=1; i<d.length; i++) {
-                    total += Number(d[i][5]);
-                    h += `<tr><td>${d[i][1]}</td><td>${d[i][3]}</td><td>${Number(d[i][5]).toLocaleString()}</td><td><a href="${d[i][6]}" target="_blank">Lihat</a></td></tr>`;
+    // Fungsi Ambil dan Tampilkan Data
+    function loadData() {
+        fetch(SCRIPT_URL)
+            .then(res => res.json())
+            .then(data => {
+                let html = "";
+                let terpakai = 0;
+                
+                // Mulai dari i=1 untuk melewati header spreadsheet
+                if (data && data.length > 1) {
+                    for(let i = 1; i < data.length; i++) {
+                        const nominal = Number(data[i][5]) || 0;
+                        terpakai += nominal;
+                        
+                        // Logika Cek Status Valid (Jika Link Nota di kolom G tidak kosong)
+                        const linkNota = data[i][6];
+                        const isValid = (linkNota && linkNota !== "No Image" && linkNota.includes("drive.google.com"));
+                        const statusBadge = isValid 
+                            ? '<span class="badge bg-success">✓ Valid</span>' 
+                            : '<span class="badge bg-warning text-dark">Pending</span>';
+
+                        html += `<tr>
+                            <td>${i}</td>
+                            <td><b>${data[i][1]}</b></td>
+                            <td>${data[i][3]}</td>
+                            <td>${data[i][4]}</td>
+                            <td class="text-primary fw-bold">Rp ${nominal.toLocaleString('id-ID')}</td>
+                            <td>${statusBadge}</td>
+                            <td><a href="${linkNota}" target="_blank" class="btn btn-sm btn-info text-white ${isValid ? '' : 'disabled'}">Lihat</a></td>
+                        </tr>`;
+                    }
+                    document.getElementById('tb').innerHTML = html;
+                    
+                    // Update Angka Dashboard
+                    document.getElementById('at').innerText = "Rp " + BUDGET_AWAL.toLocaleString('id-ID');
+                    document.getElementById('dt').innerText = "Rp " + terpakai.toLocaleString('id-ID');
+                    document.getElementById('sa').innerText = "Rp " + (BUDGET_AWAL - terpakai).toLocaleString('id-ID');
                 }
-                document.getElementById('tb').innerHTML = h;
-                document.getElementById('at').innerText = "Rp " + BUDGET_AWAL.toLocaleString();
-                document.getElementById('dt').innerText = "Rp " + total.toLocaleString();
-                document.getElementById('sa').innerText = "Rp " + (BUDGET_AWAL - total).toLocaleString();
             });
-        }
+    }
 
-        // Kirim Data
-        document.getElementById('f').onsubmit = function(e) {
-            e.preventDefault();
-            document.getElementById('btn').innerText = "Proses...";
-            const fr = new FileReader();
-            fr.readAsDataURL(document.getElementById('n6').files[0]);
-            fr.onload = () => {
-                const body = {
-                    noPesanan: document.getElementById('n1').value,
-                    tglPesan: document.getElementById('n2').value,
-                    nama: document.getElementById('n3').value,
-                    keperluan: document.getElementById('n4').value,
-                    nominal: document.getElementById('n5').value,
-                    imageBlob: fr.result
-                };
-                fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(body) })
-                .then(() => { alert('Sukses!'); location.reload(); });
+    // Fungsi Kirim Data
+    document.getElementById('f').onsubmit = function(e) {
+        e.preventDefault();
+        const btn = document.getElementById('btn');
+        btn.disabled = true;
+        btn.innerText = "Sedang Mengirim...";
+
+        const fileInput = document.getElementById('n6');
+        const file = fileInput.files[0];
+        const reader = new FileReader();
+
+        reader.onload = function() {
+            const body = {
+                noPesanan: document.getElementById('n1').value,
+                tglPesan: document.getElementById('n2').value,
+                nama: document.getElementById('n3').value,
+                keperluan: document.getElementById('n4').value,
+                nominal: document.getElementById('n5').value,
+                imageBlob: reader.result
             };
+
+            fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(body) })
+            .then(() => {
+                alert('Data Berhasil Diupload!');
+                location.reload();
+            })
+            .catch(() => {
+                alert('Gagal! Cek koneksi.');
+                btn.disabled = false;
+                btn.innerText = "Upload Data";
+            });
+        };
+        reader.readAsDataURL(file);
+    };
+
+    // Panggil fungsi saat web dibuka
+    loadData();
         };
         load();
     </script>
